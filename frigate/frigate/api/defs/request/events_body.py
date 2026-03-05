@@ -45,6 +45,7 @@ class EventsCreateBody(BaseModel):
 
 class EventsEndBody(BaseModel):
     end_time: Optional[float] = None
+    round_id: Optional[str] = Field(default=None)
 
 
 class EventsDeleteBody(BaseModel):
