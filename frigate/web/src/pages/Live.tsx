@@ -1,17 +1,20 @@
 import { useFullscreen } from "@/hooks/use-fullscreen";
 import useKeyboardListener from "@/hooks/use-keyboard-listener";
-import { useHashState, useSearchEffect } from "@/hooks/use-overlay-state";
-import { useUserPersistedOverlayState } from "@/hooks/use-overlay-state";
+import {
+  useHashState,
+  useSearchEffect,
+  useUserPersistedOverlayState,
+} from "@/hooks/use-overlay-state";
 import { FrigateConfig } from "@/types/frigateConfig";
 import LiveBirdseyeView from "@/views/live/LiveBirdseyeView";
 import LiveCameraView from "@/views/live/LiveCameraView";
 import LiveDashboardView from "@/views/live/LiveDashboardView";
 import { useTranslation } from "react-i18next";
 
-import { useEffect, useMemo, useRef } from "react";
-import useSWR from "swr";
 import { useAllowedCameras } from "@/hooks/use-allowed-cameras";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { useEffect, useMemo, useRef } from "react";
+import useSWR from "swr";
 
 function Live() {
   const { t } = useTranslation(["views/live"]);

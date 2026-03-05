@@ -1,11 +1,22 @@
 import { useFrigateReviews } from "@/api/ws";
 import Logo from "@/components/Logo";
+import { AnimatedEventCard } from "@/components/card/AnimatedEventCard";
+import { EmptyCard } from "@/components/card/EmptyCard";
 import { CameraGroupSelector } from "@/components/filter/CameraGroupSelector";
 import { LiveGridIcon, LiveListIcon } from "@/components/icons/LiveIcons";
-import { AnimatedEventCard } from "@/components/card/AnimatedEventCard";
+import LiveContextMenu from "@/components/menu/LiveContextMenu";
 import BirdseyeLivePlayer from "@/components/player/BirdseyeLivePlayer";
 import LivePlayer from "@/components/player/LivePlayer";
 import { Button } from "@/components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Tooltip,
@@ -13,12 +24,24 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { AuthContext } from "@/context/auth-context";
+import { useStreamingSettings } from "@/context/streaming-settings-provider";
+import { useResizeObserver } from "@/hooks/resize-observer";
+import useCameraLiveMode from "@/hooks/use-camera-live-mode";
+import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useUserPersistence } from "@/hooks/use-user-persistence";
+import { cn } from "@/lib/utils";
 import {
   AllGroupsStreamingSettings,
   CameraConfig,
   FrigateConfig,
 } from "@/types/frigateConfig";
+import {
+  AudioState,
+  LivePlayerError,
+  StatsState,
+  VolumeState,
+} from "@/types/live";
 import { ReviewSegment } from "@/types/review";
 import {
   useCallback,
@@ -34,27 +57,13 @@ import {
   isMobileOnly,
   isTablet,
 } from "react-device-detect";
-import useSWR from "swr";
-import DraggableGridLayout from "./DraggableGridLayout";
+import { useTranslation } from "react-i18next";
+import { BsFillCameraVideoOffFill } from "react-icons/bs";
+import { FaCompress, FaExpand } from "react-icons/fa";
 import { IoClose } from "react-icons/io5";
 import { LuLayoutDashboard } from "react-icons/lu";
-import { cn } from "@/lib/utils";
-import {
-  AudioState,
-  LivePlayerError,
-  StatsState,
-  VolumeState,
-} from "@/types/live";
-import { FaCompress, FaExpand } from "react-icons/fa";
-import useCameraLiveMode from "@/hooks/use-camera-live-mode";
-import { useResizeObserver } from "@/hooks/resize-observer";
-import LiveContextMenu from "@/components/menu/LiveContextMenu";
-import { useStreamingSettings } from "@/context/streaming-settings-provider";
-import { useTranslation } from "react-i18next";
-import { EmptyCard } from "@/components/card/EmptyCard";
-import { BsFillCameraVideoOffFill } from "react-icons/bs";
-import { AuthContext } from "@/context/auth-context";
-import { useIsAdmin } from "@/hooks/use-is-admin";
+import useSWR from "swr";
+import DraggableGridLayout from "./DraggableGridLayout";
 
 type LiveDashboardViewProps = {
   cameras: CameraConfig[];
@@ -86,6 +95,21 @@ export default function LiveDashboardView({
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const birdseyeContainerRef = useRef<HTMLDivElement>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+  const totalPages = Math.ceil(cameras.length / itemsPerPage);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [cameras.length, currentPage, totalPages]);
+
+  const currentCameras = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return cameras.slice(startIndex, startIndex + itemsPerPage);
+  }, [cameras, currentPage]);
 
   // recent events
 
@@ -267,7 +291,7 @@ export default function LiveDashboardView({
     isRestreamedStates,
     supportsAudioOutputStates,
     streamMetadata,
-  } = useCameraLiveMode(cameras, windowVisible, activeStreams);
+  } = useCameraLiveMode(currentCameras, windowVisible, activeStreams);
 
   const birdseyeConfig = useMemo(() => config?.birdseye, [config]);
 
@@ -503,7 +527,7 @@ export default function LiveDashboardView({
                     />
                   </div>
                 )}
-                {cameras.map((camera) => {
+                {currentCameras.map((camera) => {
                   let grow;
                   const aspectRatio =
                     camera.detect.width / camera.detect.height;
@@ -640,7 +664,7 @@ export default function LiveDashboardView({
             </>
           ) : (
             <DraggableGridLayout
-              cameras={cameras}
+              cameras={currentCameras}
               cameraGroup={cameraGroup}
               containerRef={containerRef}
               cameraRef={cameraRef}
@@ -661,6 +685,114 @@ export default function LiveDashboardView({
             />
           )}
         </>
+      )}
+
+      {cameras.length > 0 && totalPages > 1 && (
+        <div className="mt-4 flex w-full justify-center pb-4">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  className={
+                    currentPage === 1
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer text-muted-foreground"
+                  }
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                />
+              </PaginationItem>
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 5;
+
+                let startPage = 1;
+                let endPage = totalPages;
+
+                if (totalPages > maxVisiblePages) {
+                  startPage = Math.max(1, currentPage - 2);
+                  endPage = Math.min(totalPages, currentPage + 2);
+
+                  if (currentPage <= 3) {
+                    endPage = 5;
+                  }
+                  if (currentPage >= totalPages - 2) {
+                    startPage = totalPages - 4;
+                  }
+                }
+
+                if (startPage > 1) {
+                  pages.push(
+                    <PaginationItem key={1}>
+                      <PaginationLink
+                        isActive={currentPage === 1}
+                        onClick={() => setCurrentPage(1)}
+                        className="cursor-pointer"
+                      >
+                        1
+                      </PaginationLink>
+                    </PaginationItem>,
+                  );
+                  if (startPage > 2) {
+                    pages.push(
+                      <PaginationItem key="start-ellipsis">
+                        <PaginationEllipsis />
+                      </PaginationItem>,
+                    );
+                  }
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <PaginationItem key={i}>
+                      <PaginationLink
+                        isActive={currentPage === i}
+                        onClick={() => setCurrentPage(i)}
+                        className="cursor-pointer"
+                      >
+                        {i}
+                      </PaginationLink>
+                    </PaginationItem>,
+                  );
+                }
+
+                if (endPage < totalPages) {
+                  if (endPage < totalPages - 1) {
+                    pages.push(
+                      <PaginationItem key="end-ellipsis">
+                        <PaginationEllipsis />
+                      </PaginationItem>,
+                    );
+                  }
+                  pages.push(
+                    <PaginationItem key={totalPages}>
+                      <PaginationLink
+                        isActive={currentPage === totalPages}
+                        onClick={() => setCurrentPage(totalPages)}
+                        className="cursor-pointer"
+                      >
+                        {totalPages}
+                      </PaginationLink>
+                    </PaginationItem>,
+                  );
+                }
+
+                return pages;
+              })()}
+              <PaginationItem>
+                <PaginationNext
+                  className={
+                    currentPage === totalPages
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer text-muted-foreground"
+                  }
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       )}
     </div>
   );
