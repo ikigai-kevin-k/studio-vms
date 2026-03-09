@@ -8,6 +8,7 @@ import shutil
 import string
 import subprocess as sp
 import threading
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -330,6 +331,40 @@ class RecordingExporter(threading.Thread):
 
         return ffmpeg_cmd, playlist_lines
 
+    def _wait_for_recordings(self, timeout: int = 30, interval: float = 2.0) -> bool:
+        """Poll the database until recording segments are available for the export time range.
+
+        Returns True if recordings were found, False if timed out.
+        """
+        elapsed = 0.0
+        while elapsed < timeout:
+            count = (
+                Recordings.select()
+                .where(
+                    Recordings.start_time.between(self.start_time, self.end_time)
+                    | Recordings.end_time.between(self.start_time, self.end_time)
+                    | (
+                        (self.start_time > Recordings.start_time)
+                        & (self.end_time < Recordings.end_time)
+                    )
+                )
+                .where(Recordings.camera == self.camera)
+                .count()
+            )
+            if count > 0:
+                logger.debug(
+                    f"Found {count} recording segment(s) for {self.camera} export after {elapsed:.1f}s"
+                )
+                return True
+            time.sleep(interval)
+            elapsed += interval
+
+        logger.warning(
+            f"Timed out waiting for recordings for {self.camera} "
+            f"({self.start_time} to {self.end_time}) after {timeout}s"
+        )
+        return False
+
     def run(self) -> None:
         logger.debug(
             f"Beginning export for {self.camera} from {self.start_time} to {self.end_time}"
@@ -344,9 +379,16 @@ class RecordingExporter(threading.Thread):
         filename_end_datetime = datetime.datetime.fromtimestamp(self.end_time).strftime(
             "%Y%m%d_%H%M%S"
         )
-        cleaned_export_id = self.export_id.split("_")[-1]
-        video_path = f"{EXPORT_DIR}/{self.camera}_{filename_start_datetime}-{filename_end_datetime}_{cleaned_export_id}.mp4"
-        thumb_path = self.save_thumbnail(self.export_id)
+        date_dir = datetime.datetime.fromtimestamp(self.start_time).strftime("%Y-%m-%d")
+        video_dir = f"{EXPORT_DIR}/{date_dir}"
+        Path(video_dir).mkdir(parents=True, exist_ok=True)
+        if self.user_provided_name:
+            video_path = f"{video_dir}/{self.user_provided_name}.mp4"
+            thumb_path = self.save_thumbnail(self.user_provided_name)
+        else:
+            cleaned_export_id = self.export_id.split("_")[-1]  
+            video_path = f"{video_dir}/{self.camera}_{filename_start_datetime}-{filename_end_datetime}_{cleaned_export_id}.mp4"
+            thumb_path = self.save_thumbnail(self.export_id)
 
         Export.insert(
             {
@@ -359,6 +401,15 @@ class RecordingExporter(threading.Thread):
                 Export.in_progress: True,
             }
         ).execute()
+
+        # Wait for recording segments to be flushed to the database
+        if self.playback_source == PlaybackSourceEnum.recordings:
+            if not self._wait_for_recordings():
+                logger.error(
+                    f"No recordings found for {self.camera}, aborting export"
+                )
+                Export.delete().where(Export.id == self.export_id).execute()
+                return
 
         try:
             if self.playback_source == PlaybackSourceEnum.recordings:

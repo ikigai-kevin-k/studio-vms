@@ -1,21 +1,21 @@
-import { useMemo, useState } from "react";
-import { Event } from "@/types/event";
 import { baseUrl } from "@/api/baseUrl";
-import { ReviewSegment, REVIEW_PADDING } from "@/types/review";
-import useSWR from "swr";
-import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   DropdownMenuPortal,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { HiDotsHorizontal } from "react-icons/hi";
-import { SearchResult } from "@/types/search";
-import { FrigateConfig } from "@/types/frigateConfig";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { Event } from "@/types/event";
+import { FrigateConfig } from "@/types/frigateConfig";
+import { REVIEW_PADDING, ReviewSegment } from "@/types/review";
+import { SearchResult } from "@/types/search";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { HiDotsHorizontal } from "react-icons/hi";
+import { useNavigate } from "react-router-dom";
+import useSWR from "swr";
 
 type Props = {
   search: SearchResult | Event;
@@ -113,7 +113,7 @@ export default function DetailActionsMenu({
               <a
                 className="w-full"
                 href={`${baseUrl}api/${search.camera}/${clipTimeRange}/clip.mp4`}
-                download
+                download={`${search.camera}_${search.label}_${search.id}.mp4`}
               >
                 <div className="flex cursor-pointer items-center gap-2">
                   <span>{t("itemMenu.downloadVideo.label")}</span>

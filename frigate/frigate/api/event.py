@@ -33,9 +33,7 @@ from frigate.api.defs.query.events_query_parameters import (
     EventsSearchQueryParams,
     EventsSummaryQueryParams,
 )
-from frigate.api.defs.query.regenerate_query_parameters import (
-    RegenerateQueryParameters,
-)
+from frigate.api.defs.query.regenerate_query_parameters import RegenerateQueryParameters
 from frigate.api.defs.request.events_body import (
     EventsAttributesBody,
     EventsCreateBody,
@@ -60,6 +58,11 @@ from frigate.config.classification import ObjectClassificationType
 from frigate.const import CLIPS_DIR, TRIGGER_DIR
 from frigate.embeddings import EmbeddingsContext
 from frigate.models import Event, ReviewSegment, Timeline, Trigger
+from frigate.record.export import (
+    PlaybackFactorEnum,
+    PlaybackSourceEnum,
+    RecordingExporter,
+)
 from frigate.track.object_processing import TrackedObject
 from frigate.util.file import get_event_thumbnail_bytes
 from frigate.util.time import get_dst_transitions, get_tz_modifiers
@@ -1828,6 +1831,28 @@ async def end_event(request: Request, event_id: str, body: EventsEndBody):
         request.app.event_metadata_updater.publish(
             (event_id, end_time), EventMetadataTypeEnum.manual_event_end.value
         )
+
+        # Start export if recording is enabled for the camera
+        camera_config = request.app.frigate_config.cameras.get(event.camera)
+        if camera_config and camera_config.record.enabled:
+            export_id_suffix = "".join(
+                random.choices(string.ascii_lowercase + string.digits, k=6)
+            )
+            export_id = f"{event.camera}_{export_id_suffix}"
+            exporter = RecordingExporter(
+                request.app.frigate_config,
+                export_id,
+                event.camera,
+                body.round_id or event.camera,
+                None,
+                int(event.start_time),
+                int(end_time),
+                PlaybackFactorEnum.realtime,
+                PlaybackSourceEnum.recordings,
+            )
+            exporter.start()
+            logger.debug(f"Started export {export_id} for event {event_id}")
+
     except DoesNotExist:
         return JSONResponse(
             content=({"success": False, "message": f"Event {event_id} not found."}),
