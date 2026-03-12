@@ -9,6 +9,7 @@ import string
 import subprocess as sp
 import threading
 import time
+import uuid
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -369,26 +370,27 @@ class RecordingExporter(threading.Thread):
         logger.debug(
             f"Beginning export for {self.camera} from {self.start_time} to {self.end_time}"
         )
+        random_id = uuid.uuid4()
         export_name = (
-            self.user_provided_name
-            or f"{self.camera.replace('_', ' ')} {self.get_datetime_from_timestamp(self.start_time)} {self.get_datetime_from_timestamp(self.end_time)}"
+            self.user_provided_name or random_id
+            # or f"{self.camera.replace('_', ' ')} {self.get_datetime_from_timestamp(self.start_time)} {self.get_datetime_from_timestamp(self.end_time)}"
         )
-        filename_start_datetime = datetime.datetime.fromtimestamp(
-            self.start_time
-        ).strftime("%Y%m%d_%H%M%S")
-        filename_end_datetime = datetime.datetime.fromtimestamp(self.end_time).strftime(
-            "%Y%m%d_%H%M%S"
-        )
+        # filename_start_datetime = datetime.datetime.fromtimestamp(
+        #     self.start_time
+        # ).strftime("%Y%m%d_%H%M%S")
+        # filename_end_datetime = datetime.datetime.fromtimestamp(self.end_time).strftime(
+        #     "%Y%m%d_%H%M%S"
+        # )
         date_dir = datetime.datetime.fromtimestamp(self.start_time).strftime("%Y-%m-%d")
         video_dir = f"{EXPORT_DIR}/{date_dir}"
         Path(video_dir).mkdir(parents=True, exist_ok=True)
-        if self.user_provided_name:
-            video_path = f"{video_dir}/{self.user_provided_name}.mp4"
-            thumb_path = self.save_thumbnail(self.user_provided_name)
-        else:
-            cleaned_export_id = self.export_id.split("_")[-1]  
-            video_path = f"{video_dir}/{self.camera}_{filename_start_datetime}-{filename_end_datetime}_{cleaned_export_id}.mp4"
-            thumb_path = self.save_thumbnail(self.export_id)
+        # if self.user_provided_name:
+        video_path = f"{video_dir}/{self.user_provided_name or random_id}.mp4"
+        thumb_path = self.save_thumbnail(self.user_provided_name or random_id)
+        # else:
+        #     cleaned_export_id = self.export_id.split("_")[-1]  
+        #     video_path = f"{video_dir}/{self.camera}_{filename_start_datetime}-{filename_end_datetime}_{cleaned_export_id}.mp4"
+        #     thumb_path = self.save_thumbnail(self.export_id)
 
         Export.insert(
             {

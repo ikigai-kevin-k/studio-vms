@@ -3,11 +3,17 @@
 import datetime
 import json
 import logging
+import random
+import string
 from typing import Any, Callable, Optional, cast
 
 from frigate.camera import PTZMetrics
 from frigate.camera.activity_manager import AudioActivityManager, CameraActivityManager
 from frigate.comms.base_communicator import Communicator
+from frigate.comms.event_metadata_updater import (
+    EventMetadataPublisher,
+    EventMetadataTypeEnum,
+)
 from frigate.comms.webpush import WebPushClient
 from frigate.config import BirdseyeModeEnum, FrigateConfig
 from frigate.config.camera.updater import (
@@ -34,6 +40,11 @@ from frigate.const import (
 )
 from frigate.models import Event, Previews, Recordings, ReviewSegment
 from frigate.ptz.onvif import OnvifCommandEnum, OnvifController
+from frigate.record.export import (
+    PlaybackFactorEnum,
+    PlaybackSourceEnum,
+    RecordingExporter,
+)
 from frigate.types import ModelStatusTypesEnum, TrackedObjectUpdateTypesEnum
 from frigate.util.object import get_camera_regions_grid
 from frigate.util.services import restart_frigate
@@ -48,12 +59,14 @@ class Dispatcher:
         self,
         config: FrigateConfig,
         config_updater: CameraConfigUpdatePublisher,
+        event_metadata_updater: EventMetadataPublisher,
         onvif: OnvifController,
         ptz_metrics: dict[str, PTZMetrics],
         communicators: list[Communicator],
     ) -> None:
         self.config = config
         self.config_updater = config_updater
+        self.event_metadata_updater = event_metadata_updater
         self.onvif = onvif
         self.ptz_metrics = ptz_metrics
         self.comms = communicators
@@ -82,6 +95,8 @@ class Dispatcher:
             "review_detections": self._on_detections_command,
             "object_descriptions": self._on_object_description_command,
             "review_descriptions": self._on_review_description_command,
+            "start_recording": self._on_start_recording_command,
+            "end_recording": self._on_end_recording_command,
         }
         self._global_settings_handlers: dict[str, Callable] = {
             "notifications": self._on_global_notification_command,
@@ -841,3 +856,121 @@ class Dispatcher:
             genai_settings,
         )
         self.publish(f"{camera_name}/review_descriptions/state", payload, retain=True)
+    
+    def _on_start_recording_command(self, camera_name: str, payload: str) -> None:
+        """Callback for start recording topic."""
+
+        try:
+            try:
+                data = json.loads(payload)
+                if not isinstance(data, dict):
+                    raise ValueError("Payload must be a dictionary")
+                label = data.get("label", "manual")
+                duration = data.get("duration")
+                sub_label = data.get("sub_label")
+                include_recording = data.get("include_recording", True)
+                score = data.get("score", 0)
+                draw = data.get("draw", {})
+            except (json.JSONDecodeError, TypeError, ValueError):
+                # Fallback to simple ON/OFF or custom label string
+                if payload == "OFF":
+                    logger.info(
+                        f"MQTT 'OFF' received for manual_event on {camera_name}, "
+                        "but event_id is required to end a specific event."
+                    )
+                    return
+                
+                label = "manual" if payload == "ON" else payload
+                duration = None
+                sub_label = None
+                include_recording = True
+                score = 0
+                draw = {}
+
+            now = datetime.datetime.now().timestamp()
+            rand_id = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
+            event_id = f"{now}-{rand_id}"
+
+            self.event_metadata_updater.publish(
+                (
+                    now,
+                    camera_name,
+                    label,
+                    event_id,
+                    include_recording,
+                    score,
+                    sub_label,
+                    duration,
+                    "api",
+                    draw,
+                ),
+                EventMetadataTypeEnum.manual_event_create.value,
+            )
+            self.publish(f"{camera_name}/end_recording/set", event_id, retain=False)
+            # TODO: change topic to send to SDP
+            logger.info(f"Created manual event {event_id} via MQTT for {camera_name}")
+
+        except Exception as e:
+            logger.error(f"Failed to process manual_event MQTT command: {e}")
+
+    def _on_end_recording_command(self, camera_name: str, payload: str) -> None:
+        """Callback for end recording topic."""
+        try:
+            try:
+                data = json.loads(payload)
+                if isinstance(data, dict):
+                    event_id = data.get("event_id")
+                    end_time = data.get("end_time")
+                    round_id = data.get("round_id")
+                else:
+                    event_id = str(data)
+                    end_time = None
+                    round_id = None
+            except (json.JSONDecodeError, TypeError):
+                event_id = payload
+                end_time = None
+                round_id = None
+
+            if not event_id:
+                logger.warning(f"No event_id provided in end_recording payload for {camera_name}")
+                return
+
+            event = Event.get_or_none(Event.id == event_id)
+            if not event:
+                logger.warning(f"Event {event_id} not found")
+                return
+
+            end_time = end_time or datetime.datetime.now().timestamp()
+
+            if end_time < event.start_time:
+                logger.debug(f"end_time ({end_time}) cannot be before start_time ({event.start_time}).")
+                return
+
+            self.event_metadata_updater.publish(
+                (event.id, end_time), EventMetadataTypeEnum.manual_event_end.value
+            )
+
+            # Start export if recording is enabled for the camera
+            camera_config = self.config.cameras.get(event.camera)
+            if camera_config and camera_config.record.enabled:
+                export_id_suffix = "".join(
+                    random.choices(string.ascii_lowercase + string.digits, k=6)
+                )
+                export_id = f"{event.camera}_{export_id_suffix}"
+
+                exporter = RecordingExporter(
+                    self.config,
+                    export_id,
+                    event.camera,
+                    round_id,
+                    None,
+                    int(event.start_time),
+                    int(end_time),
+                    PlaybackFactorEnum.realtime,
+                    PlaybackSourceEnum.recordings,
+                )
+                exporter.start()
+                logger.info(f"Ended manual event {event.id} via MQTT for {event.camera}")
+
+        except Exception as e:
+            logger.error(f"Error in _on_end_recording_command: {e}")

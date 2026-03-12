@@ -336,6 +336,7 @@ class FrigateApp:
         self.dispatcher = Dispatcher(
             self.config,
             self.inter_config_updater,
+            self.event_metadata_updater,
             self.onvif_controller,
             self.ptz_metrics,
             comms,

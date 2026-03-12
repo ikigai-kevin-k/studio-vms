@@ -1843,7 +1843,7 @@ async def end_event(request: Request, event_id: str, body: EventsEndBody):
                 request.app.frigate_config,
                 export_id,
                 event.camera,
-                body.round_id or event.camera,
+                body.round_id,
                 None,
                 int(event.start_time),
                 int(end_time),

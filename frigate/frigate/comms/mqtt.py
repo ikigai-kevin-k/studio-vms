@@ -132,7 +132,16 @@ class MqttClient(Communicator):
                 "ON" if camera.review.genai.enabled_in_config else "OFF",
                 retain=True,
             )
-
+            self.publish(
+                f"{camera_name}/start_recording/state",
+                "ON",
+                retain=True,
+            )
+            self.publish(
+                f"{camera_name}/end_recording/state",
+                "OFF",
+                retain=True,
+            )
         if self.config.notifications.enabled_in_config:
             self.publish(
                 "notifications/state",
@@ -227,6 +236,8 @@ class MqttClient(Communicator):
             "review_detections",
             "object_descriptions",
             "review_descriptions",
+            "start_recording",
+            "end_recording",
         ]
 
         for name in self.config.cameras.keys():
