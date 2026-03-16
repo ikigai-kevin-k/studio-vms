@@ -1,0 +1,19 @@
+{
+  "title": "Stream Configuration",
+  "select": {
+    "deviceCode": "Device Code",
+    "cdn": "CDN",
+    "domainName": "Domain Name",
+    "location": "Location",
+    "quality": {
+      "label": "Quality",
+      "options": {
+        "hd": "HD",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      }
+    },
+    "background": "Background"
+  }
+}

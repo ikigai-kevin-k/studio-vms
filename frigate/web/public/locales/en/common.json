@@ -245,6 +245,7 @@
     "uiPlayground": "UI Playground",
     "faceLibrary": "Face Library",
     "classification": "Classification",
+    "streamConfig": "Stream Configuration",
     "user": {
       "title": "User",
       "account": "Account",
