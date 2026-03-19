@@ -1,21 +1,21 @@
-import Providers from "@/context/providers";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Wrapper from "@/components/Wrapper";
 import Sidebar from "@/components/navigation/Sidebar";
+import Providers from "@/context/providers";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
+import { isRedirectingToLogin } from "@/api/auth-redirect";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import ActivityIndicator from "@/components/indicators/activity-indicator";
+import { AuthProvider } from "@/context/auth-context";
+import { Suspense, lazy } from "react";
 import { isDesktop, isMobile } from "react-device-detect";
+import useSWR from "swr";
 import Statusbar from "./components/Statusbar";
 import Bottombar from "./components/navigation/Bottombar";
-import { Suspense, lazy } from "react";
 import { Redirect } from "./components/navigation/Redirect";
 import { cn } from "./lib/utils";
-import { isPWA } from "./utils/isPWA";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { AuthProvider } from "@/context/auth-context";
-import useSWR from "swr";
 import { FrigateConfig } from "./types/frigateConfig";
-import ActivityIndicator from "@/components/indicators/activity-indicator";
-import { isRedirectingToLogin } from "@/api/auth-redirect";
+import { isPWA } from "./utils/isPWA";
 
 const Live = lazy(() => import("@/pages/Live"));
 const Events = lazy(() => import("@/pages/Events"));
@@ -29,6 +29,8 @@ const FaceLibrary = lazy(() => import("@/pages/FaceLibrary"));
 const Classification = lazy(() => import("@/pages/ClassificationModel"));
 const Logs = lazy(() => import("@/pages/Logs"));
 const AccessDenied = lazy(() => import("@/pages/AccessDenied"));
+const StreamConfig = lazy(() => import("@/pages/StreamConfig"));
+const Replay = lazy(() => import("@/pages/Replay"));
 
 function App() {
   const { data: config } = useSWR<FrigateConfig>("config", {
