@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { isDesktop, isMobileOnly, isSafari } from "react-device-detect";
-import { LuPause, LuPlay } from "react-icons/lu";
+import { LuPause, LuPlay, LuSkipBack, LuSkipForward } from "react-icons/lu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +38,7 @@ import { useTranslation } from "react-i18next";
 type VideoControls = {
   volume?: boolean;
   seek?: boolean;
+  frameStep?: boolean;
   playbackRate?: boolean;
   plusUpload?: boolean;
   fullscreen?: boolean;
@@ -46,6 +47,7 @@ type VideoControls = {
 const CONTROLS_DEFAULT: VideoControls = {
   volume: true,
   seek: true,
+  frameStep: false,
   playbackRate: true,
   plusUpload: false,
   fullscreen: false,
@@ -71,6 +73,8 @@ type VideoControlsProps = {
   onSeek: (diff: number) => void;
   onSetPlaybackRate: (rate: number) => void;
   onUploadFrame?: () => void;
+  onPreviousFrame?: () => void;
+  onNextFrame?: () => void;
   toggleFullscreen?: () => void;
   containerRef?: React.MutableRefObject<HTMLDivElement | null>;
 };
@@ -92,6 +96,8 @@ export default function VideoControls({
   onSeek,
   onSetPlaybackRate,
   onUploadFrame,
+  onPreviousFrame,
+  onNextFrame,
   toggleFullscreen,
   containerRef,
 }: VideoControlsProps) {
@@ -231,6 +237,16 @@ export default function VideoControls({
       {features.seek && (
         <MdReplay10 className="size-5 cursor-pointer" onClick={onReplay} />
       )}
+      {features.frameStep && onPreviousFrame && (
+        <LuSkipBack
+          className="size-5 cursor-pointer"
+          title="previous frame"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPreviousFrame();
+          }}
+        />
+      )}
       <div className="cursor-pointer" onClick={onTogglePlay}>
         {isPlaying ? (
           <LuPause className="size-5 fill-primary text-primary" />
@@ -238,6 +254,16 @@ export default function VideoControls({
           <LuPlay className="size-5 fill-primary text-primary" />
         )}
       </div>
+      {features.frameStep && onNextFrame && (
+        <LuSkipForward
+          className="size-5 cursor-pointer"
+          title="next frame"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNextFrame();
+          }}
+        />
+      )}
       {features.seek && (
         <MdForward10 className="size-5 cursor-pointer" onClick={onSkip} />
       )}

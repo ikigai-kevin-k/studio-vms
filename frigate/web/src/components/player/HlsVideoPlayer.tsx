@@ -1,3 +1,13 @@
+import ObjectTrackOverlay from "@/components/overlay/ObjectTrackOverlay";
+import { useIsAdmin } from "@/hooks/use-is-admin";
+import { useOverlayState } from "@/hooks/use-overlay-state";
+import { useUserPersistence } from "@/hooks/use-user-persistence";
+import { cn } from "@/lib/utils";
+import { FrigateConfig } from "@/types/frigateConfig";
+import { VideoResolutionType } from "@/types/live";
+import { ASPECT_VERTICAL_LAYOUT, RecordingPlayerError } from "@/types/record";
+import { AxiosResponse } from "axios";
+import Hls, { HlsConfig } from "hls.js";
 import {
   MutableRefObject,
   useCallback,
@@ -5,22 +15,12 @@ import {
   useRef,
   useState,
 } from "react";
-import Hls, { HlsConfig } from "hls.js";
 import { isDesktop, isMobile } from "react-device-detect";
-import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
-import VideoControls from "./VideoControls";
-import { VideoResolutionType } from "@/types/live";
-import useSWR from "swr";
-import { FrigateConfig } from "@/types/frigateConfig";
-import { AxiosResponse } from "axios";
-import { toast } from "sonner";
-import { useOverlayState } from "@/hooks/use-overlay-state";
-import { useUserPersistence } from "@/hooks/use-user-persistence";
-import { cn } from "@/lib/utils";
-import { ASPECT_VERTICAL_LAYOUT, RecordingPlayerError } from "@/types/record";
 import { useTranslation } from "react-i18next";
-import ObjectTrackOverlay from "@/components/overlay/ObjectTrackOverlay";
-import { useIsAdmin } from "@/hooks/use-is-admin";
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import { toast } from "sonner";
+import useSWR from "swr";
+import VideoControls from "./VideoControls";
 
 // Android native hls does not seek correctly
 const USE_NATIVE_HLS = false;
@@ -45,6 +45,7 @@ type HlsVideoPlayerProps = {
   fullscreen: boolean;
   frigateControls?: boolean;
   inpointOffset?: number;
+  frameRate?: number;
   onClipEnded?: (currentTime: number) => void;
   onPlayerLoaded?: () => void;
   onTimeUpdate?: (time: number) => void;
@@ -69,6 +70,7 @@ export default function HlsVideoPlayer({
   fullscreen,
   frigateControls = true,
   inpointOffset = 0,
+  frameRate = 30,
   onClipEnded,
   onPlayerLoaded,
   onTimeUpdate,
@@ -268,6 +270,38 @@ export default function HlsVideoPlayer({
     return currentTime + inpointOffset;
   }, [videoRef, inpointOffset]);
 
+  const stepVideoFrame = useCallback(
+    (direction: 1 | -1) => {
+      if (!videoRef.current) {
+        return;
+      }
+      const step = direction / frameRate;
+      videoRef.current.currentTime = Math.max(
+        0,
+        videoRef.current.currentTime + step,
+      );
+    },
+    [videoRef, frameRate],
+  );
+
+  const onUploadFrameHandler = async () => {
+    const frameTime = getVideoTime();
+
+    if (frameTime && onUploadFrame) {
+      const resp = await onUploadFrame(frameTime);
+
+      if (resp && resp.status == 200) {
+        toast.success(t("toast.success.submittedFrigatePlus"), {
+          position: "top-center",
+        });
+      } else {
+        toast.success(t("toast.error.submitFrigatePlusFailed"), {
+          position: "top-center",
+        });
+      }
+    }
+  };
+
   return (
     <TransformWrapper
       minScale={1.0}
@@ -275,7 +309,7 @@ export default function HlsVideoPlayer({
       onZoom={(zoom) => setZoomScale(zoom.state.scale)}
       disabled={!frigateControls}
     >
-      {frigateControls && (
+      {1 && (
         <VideoControls
           className={cn(
             "absolute left-1/2 z-50 -translate-x-1/2",
@@ -289,6 +323,7 @@ export default function HlsVideoPlayer({
           features={{
             volume: true,
             seek: true,
+            frameStep: true,
             playbackRate: true,
             plusUpload: isAdmin && config?.plus?.enabled == true,
             fullscreen: supportsFullscreen,
@@ -314,23 +349,9 @@ export default function HlsVideoPlayer({
               videoRef.current.playbackRate = rate;
             }
           }}
-          onUploadFrame={async () => {
-            const frameTime = getVideoTime();
-
-            if (frameTime && onUploadFrame) {
-              const resp = await onUploadFrame(frameTime);
-
-              if (resp && resp.status == 200) {
-                toast.success(t("toast.success.submittedFrigatePlus"), {
-                  position: "top-center",
-                });
-              } else {
-                toast.success(t("toast.error.submitFrigatePlusFailed"), {
-                  position: "top-center",
-                });
-              }
-            }
-          }}
+          onPreviousFrame={() => stepVideoFrame(-1)}
+          onNextFrame={() => stepVideoFrame(1)}
+          onUploadFrame={onUploadFrameHandler}
           fullscreen={fullscreen}
           toggleFullscreen={toggleFullscreen}
           containerRef={containerRef}
