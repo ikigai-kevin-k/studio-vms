@@ -309,7 +309,7 @@ export default function HlsVideoPlayer({
       onZoom={(zoom) => setZoomScale(zoom.state.scale)}
       disabled={!frigateControls}
     >
-      {1 && (
+      {frigateControls && (
         <VideoControls
           className={cn(
             "absolute left-1/2 z-50 -translate-x-1/2",

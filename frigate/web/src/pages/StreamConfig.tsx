@@ -2,13 +2,15 @@ import { ConfirmDialog } from "@/components/stream-config/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { zodResolver } from "@hookform/resolvers/zod";
+import axios from "axios";
 import { useMemo, useState } from "react";
 import { Controller, Path, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { z } from "zod";
 
 const streamConfigSchema = z.object({
-  deviceCode: z.string().min(1, { message: "Required" }),
+  deviceCode: z.string(),
   cdn: z.array(z.string()),
   domainName: z.array(z.string()),
   location: z.array(z.string()),
@@ -142,9 +144,57 @@ function StreamConfig() {
     ],
     [t],
   );
-  const onSubmit = handleSubmit(() => {
+  const onSubmit = handleSubmit((data: any) => {
     setShow(true);
+    console.log(data);
   });
+
+  const onClose = () => setConfirm(false);
+  const ENV = "iki-cit";
+  // const CDN = "tcsry";
+  // const PREFIX = "sr";
+  const handleConfirm = async () => {
+    try {
+      await axios.patch(
+        `https://studio-api.${ENV}.cc/v1/service/cdn`,
+        {
+          // tableId: data.deviceCode ?? "ARO-001-d",
+          // cdnDst: {
+          //   primary: {
+          //     lo: `https://livepull-${CDN}.iki-utl.cc/live/${PREFIX}lo_dev.flv`,
+          //     me: `https://livepull-${CDN}.iki-utl.cc/live/${PREFIX}me_dev.flv`,
+          //     hi: `https://livepull-${CDN}.iki-utl.cc/live/${PREFIX}hi_dev.flv`,
+          //     hd: `https://livepull-${CDN}.iki-utl.cc/live/${PREFIX}hd_dev.flv`,
+          //   },
+          //   secondary: {
+          //     lo: "",
+          //     me: "",
+          //     hi: "",
+          //     hd: "",
+          //   },
+          // },
+        },
+        {
+          headers: {
+            "x-signature": "undefined",
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    } catch (error: unknown) {
+      const apiError = error as {
+        response?: { data?: { error: { message?: string } } };
+      };
+      const errorMessage =
+        apiError.response?.data?.error?.message || "Unknown error";
+
+      console.log(errorMessage, "err");
+      toast.error(errorMessage, {
+        position: "top-center",
+      });
+    }
+    onClose();
+  };
 
   return (
     <div className="flex size-full flex-col gap-4 overflow-y-auto p-7">
@@ -158,6 +208,9 @@ function StreamConfig() {
                   key={data.value}
                   name={data.value}
                   control={control}
+                  // rules={{
+                  //   maxLength: 300,
+                  // }}
                   render={({ field, fieldState }) => {
                     return (
                       <div className="flex flex-col gap-1">
@@ -168,6 +221,7 @@ function StreamConfig() {
                           onChange={field.onChange}
                           placeholder={data.label}
                           hasError={!!fieldState.error}
+                          // disabled={data}
                         />
                         {fieldState.error && (
                           <span className="ml-1 text-xs text-red-500">
@@ -182,6 +236,14 @@ function StreamConfig() {
             })}
           </div>
           <div className="flex gap-4 self-end">
+            <Button
+              className="mt-4 w-20"
+              variant="select"
+              type="button"
+              onClick={() => setConfirm(true)}
+            >
+              Deploy
+            </Button>
             <Button
               className="mt-4 w-20"
               variant="select"
@@ -235,8 +297,8 @@ function StreamConfig() {
       )}
       <ConfirmDialog
         isOpen={confirm}
-        onClose={() => setConfirm(false)}
-        onSave={() => setConfirm(false)}
+        onClose={onClose}
+        onSave={handleConfirm}
       />
     </div>
   );
