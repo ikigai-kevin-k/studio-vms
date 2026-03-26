@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 const streamConfigSchema = z.object({
-  deviceCode: z.string(),
+  deviceCode: z.string().min(1, { message: "Required" }),
   cdn: z.array(z.string()),
   domainName: z.array(z.string()),
   location: z.array(z.string()),
@@ -144,9 +144,8 @@ function StreamConfig() {
     ],
     [t],
   );
-  const onSubmit = handleSubmit((data: any) => {
+  const onSubmit = handleSubmit((data: unknown) => {
     setShow(true);
-    console.log(data);
   });
 
   const onClose = () => setConfirm(false);
@@ -187,8 +186,6 @@ function StreamConfig() {
       };
       const errorMessage =
         apiError.response?.data?.error?.message || "Unknown error";
-
-      console.log(errorMessage, "err");
       toast.error(errorMessage, {
         position: "top-center",
       });
@@ -208,9 +205,6 @@ function StreamConfig() {
                   key={data.value}
                   name={data.value}
                   control={control}
-                  // rules={{
-                  //   maxLength: 300,
-                  // }}
                   render={({ field, fieldState }) => {
                     return (
                       <div className="flex flex-col gap-1">
@@ -221,7 +215,6 @@ function StreamConfig() {
                           onChange={field.onChange}
                           placeholder={data.label}
                           hasError={!!fieldState.error}
-                          // disabled={data}
                         />
                         {fieldState.error && (
                           <span className="ml-1 text-xs text-red-500">
