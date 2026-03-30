@@ -22,6 +22,12 @@ services:
     #                   - driver: nvidia
     #                     count: 1
     #                     capabilities: [gpu]
+    ports:
+      - "9005:5000"
+      - "5173:5173"
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
+      - "8971:8971"
     environment:
       YOLO_MODELS: ""
     # devices:
@@ -33,7 +39,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./config:/config
       - ./debug:/media/frigate
-     # - /dev/bus/usb:/dev/bus/usb # Uncomment for Google Coral USB
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
   mqtt:
     container_name: mqtt
     image: eclipse-mosquitto:2.0
