@@ -144,7 +144,7 @@ function StreamConfig() {
     ],
     [t],
   );
-  const onSubmit = handleSubmit((data: unknown) => {
+  const onSubmit = handleSubmit(() => {
     setShow(true);
   });
 
