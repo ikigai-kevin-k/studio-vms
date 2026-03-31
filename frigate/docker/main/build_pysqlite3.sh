@@ -45,4 +45,4 @@ cp "../sqlite/sqlite3.h" ./
 # Create the wheel and put it in the /wheels dir.
 sed -i "s|name='pysqlite3-binary'|name=PACKAGE_NAME|g" setup.py
 python3 setup.py build_static
-pip3 wheel . -w /wheels
+uv build --wheel --out-dir /wheels

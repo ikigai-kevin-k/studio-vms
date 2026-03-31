@@ -1,6 +1,6 @@
 services:
   devcontainer:
-    container_name: frigate-devcontainer
+    container_name: frigate
     # Check host system's actual render/video/plugdev group IDs with 'getent group render', 'getent group video', and 'getent group plugdev'
     # Must add these exact IDs in container's group_add section or OpenVINO GPU acceleration will fail
     group_add:
@@ -8,13 +8,13 @@ services:
       - "110" # render
       - "44"  # video
       - "46"  # plugdev
-    shm_size: "256mb"
+    shm_size: "512mb"
     build:
       context: .
       dockerfile: docker/main/Dockerfile
       # Use target devcontainer-trt for TensorRT dev
       target: devcontainer
-    ## Uncomment this block for nvidia gpu support
+    # Uncomment this block for nvidia gpu support
     # deploy:
     #       resources:
     #           reservations:
@@ -39,6 +39,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./config:/config
       - ./debug:/media/frigate
+      - /mnt/nas_vms:/media/frigate
       - type: tmpfs
         target: /tmp/cache
         tmpfs:
