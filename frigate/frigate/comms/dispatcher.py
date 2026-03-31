@@ -76,6 +76,8 @@ class Dispatcher:
         self.embeddings_reindex: dict[str, Any] = {}
         self.birdseye_layout: dict[str, Any] = {}
         self.audio_transcription_state: str = "idle"
+        self.round_id: str = ""
+        self.end_recording_round_id: str = ""
         self._camera_settings_handlers: dict[str, Callable] = {
             "audio": self._on_audio_command,
             "audio_transcription": self._on_audio_transcription_command,
@@ -871,6 +873,7 @@ class Dispatcher:
                 include_recording = data.get("include_recording", True)
                 score = data.get("score", 0)
                 draw = data.get("draw", {})
+                round_id = data.get("round_id", "default_round_id")
             except (json.JSONDecodeError, TypeError, ValueError):
                 # Fallback to simple ON/OFF or custom label string
                 if payload == "OFF":
@@ -886,11 +889,15 @@ class Dispatcher:
                 include_recording = True
                 score = 0
                 draw = {}
+                round_id = "123"
 
+            if self.round_id == round_id:
+                logger.warning(f"Round ID {round_id} already exists for {camera_name}")
+                return
+            self.round_id = round_id
             now = datetime.datetime.now().timestamp()
             rand_id = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
             event_id = f"{now}-{rand_id}"
-
             self.event_metadata_updater.publish(
                 (
                     now,
@@ -906,10 +913,16 @@ class Dispatcher:
                 ),
                 EventMetadataTypeEnum.manual_event_create.value,
             )
-            self.publish(f"{camera_name}/end_recording/set", event_id, retain=False)
-            # TODO: change topic to send to SDP
+            data = json.dumps(
+                    {
+                        "event_id": event_id,
+                        "round_id": round_id,
+                    }
+                )
             logger.info(f"Created manual event {event_id} via MQTT for {camera_name}")
 
+            self.publish("camera/event_id", data, retain=False)
+            
         except Exception as e:
             logger.error(f"Failed to process manual_event MQTT command: {e}")
 
@@ -940,9 +953,12 @@ class Dispatcher:
                 logger.warning(f"Event {event_id} not found")
                 return
 
-            end_time = end_time or datetime.datetime.now().timestamp()
+            try:
+                end_time = float(end_time) if end_time else datetime.datetime.now().timestamp()
+            except (ValueError, TypeError):
+                end_time = datetime.datetime.now().timestamp()
 
-            if end_time < event.start_time:
+            if end_time < float(event.start_time):
                 logger.debug(f"end_time ({end_time}) cannot be before start_time ({event.start_time}).")
                 return
 
@@ -950,6 +966,11 @@ class Dispatcher:
                 (event.id, end_time), EventMetadataTypeEnum.manual_event_end.value
             )
 
+            if self.end_recording_round_id == round_id:
+                logger.warning(f"Round ID {round_id} already exists for {camera_name}")
+                self.publish("camera/event_id", f'{{"msg": "Round ID {round_id} already exists for {camera_name}"}}', retain=False)
+                return
+            self.end_recording_round_id = round_id
             # Start export if recording is enabled for the camera
             camera_config = self.config.cameras.get(event.camera)
             if camera_config and camera_config.record.enabled:
@@ -971,6 +992,11 @@ class Dispatcher:
                 )
                 exporter.start()
                 logger.info(f"Ended manual event {event.id} via MQTT for {event.camera}")
+                self.publish("camera/event_id", '{"msg":"success"}', retain=False)
+            else:
+                logger.warning(f"Recording not enabled for camera {event.camera}")
+                self.publish("camera/event_id", '{"msg":"failed"}', retain=False)
 
         except Exception as e:
             logger.error(f"Error in _on_end_recording_command: {e}")
+            self.publish("camera/event_id", '{"msg":"failed"}', retain=False)

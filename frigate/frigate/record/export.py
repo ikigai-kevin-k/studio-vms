@@ -129,7 +129,7 @@ class RecordingExporter(threading.Thread):
             minutes = int(diff / 60)
             seconds = int(diff % 60)
             ffmpeg_cmd = [
-                "/usr/lib/ffmpeg/7.0/bin/ffmpeg",  # hardcode path for exports thumbnail due to missing libwebp support
+                self.config.ffmpeg.ffmpeg_path,
                 "-hide_banner",
                 "-loglevel",
                 "warning",
@@ -183,10 +183,11 @@ class RecordingExporter(threading.Thread):
 
     def get_record_export_command(self, video_path: str) -> list[str]:
         if (self.end_time - self.start_time) <= MAX_PLAYLIST_SECONDS:
-            playlist_lines = f"http://127.0.0.1:5000/vod/{self.camera}/start/{self.start_time}/end/{self.end_time}/index.m3u8"
+            url = f"http://127.0.0.1:5000/vod/{self.camera}/start/{self.start_time}/end/{self.end_time}/index.m3u8"
             ffmpeg_input = (
-                f"-y -protocol_whitelist pipe,file,http,tcp -i {playlist_lines}"
+                f"-y -protocol_whitelist pipe,file,http,tcp -i {url}"
             )
+            playlist_lines = []
         else:
             playlist_lines = []
 
@@ -370,7 +371,7 @@ class RecordingExporter(threading.Thread):
         logger.debug(
             f"Beginning export for {self.camera} from {self.start_time} to {self.end_time}"
         )
-        random_id = uuid.uuid4()
+        random_id = str(uuid.uuid4())
         export_name = (
             self.user_provided_name or random_id
             # or f"{self.camera.replace('_', ' ')} {self.get_datetime_from_timestamp(self.start_time)} {self.get_datetime_from_timestamp(self.end_time)}"
