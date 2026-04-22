@@ -203,6 +203,34 @@ ls -la /mnt/nas_vms/exports
 ls -la /mnt/nas_vms/exports/$(date +%F)
 ```
 
+### Step 7: Safety guard to prevent disk growth
+
+When testing is done, explicitly turn recordings off:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1884 -t "frigate/test/recordings/set" -m "OFF"
+mosquitto_sub -h 127.0.0.1 -p 1884 -t "frigate/test/recordings/state" -C 1 -W 3 -v
+```
+
+Expected:
+
+- `frigate/test/recordings/state OFF`
+
+### Step 8: Periodic storage monitoring (every few minutes)
+
+Run this command every few minutes to ensure storage is not increasing unexpectedly:
+
+```bash
+du -sh /mnt/nas_vms/recordings /mnt/nas_vms/exports /mnt/nas_vms/clips
+```
+
+Recommended quick checks:
+
+```bash
+find /mnt/nas_vms/recordings -type f | wc -l
+find /mnt/nas_vms/exports -type f | wc -l
+```
+
 ---
 
 ## Validation Result (Current)
@@ -221,3 +249,4 @@ Real mode has been validated for:
 - Do not use placeholder `"<REAL_EVENT_ID>"`; use the actual callback value.
 - Seeing your own topic in `frigate/#` only proves broker transport, not business success.
 - If host check path is wrong (`/media/frigate/...`), you may think exports are missing while they actually exist in `/mnt/nas_vms/...`.
+- If you forget to send `recordings/set OFF` after testing, long-running recording behavior may continue and consume disk space over time.
