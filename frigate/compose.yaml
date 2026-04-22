@@ -13,7 +13,7 @@ services:
       context: .
       dockerfile: docker/main/Dockerfile
       # Use target devcontainer-trt for TensorRT dev
-      target: devcontainer
+      target: frigate
     # Uncomment this block for nvidia gpu support
     # deploy:
     #       resources:
